@@ -6,6 +6,7 @@ import {
   type ScanPresetKey,
 } from "./scan-presets";
 import type { Profile, Rfp } from "@shared/schema";
+import { z } from "zod";
 
 type DiscoveryHit = {
   url?: string;
@@ -44,18 +45,60 @@ function parseSources(profile: Profile): string[] {
     .filter((s) => s.length > 0);
 }
 
-// Best-effort recency filter — if the result has a parseable date, keep only
-// items from the last 7 days; otherwise keep them (we can't tell).
-function isRecentEnough(hit: DiscoveryHit, daysBack = 7): boolean {
-  if (!hit.date) return true;
-  const t = Date.parse(hit.date);
-  if (Number.isNaN(t)) return true;
-  const cutoff = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-  return t >= cutoff;
+type AnthropicWebResult = { url?: string; title?: string; snippet?: string; content?: string };
+type AnthropicContentBlock = { type?: string; content?: AnthropicWebResult[]; text?: string };
+
+// A single opportunity the model extracted from its web searches, with the
+// fields we actually surface (due date, value, agency) rather than hardcoding them.
+const discoveredOpportunitySchema = z.object({
+  title: z.string().trim().min(3).max(300),
+  agency: z.string().trim().max(200).optional().default(""),
+  url: z.string().trim().url().max(1000),
+  dueDate: z.string().trim().max(120).optional().default(""),
+  value: z.string().trim().max(120).optional().default(""),
+  summary: z.string().trim().max(600).optional().default(""),
+});
+export type DiscoveredOpportunity = z.infer<typeof discoveredOpportunitySchema>;
+
+function extractJsonObject(text: string): string | null {
+  const withoutFences = text.replace(/```(?:json)?/gi, "").trim();
+  const start = withoutFences.indexOf("{");
+  const end = withoutFences.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  return withoutFences.slice(start, end + 1);
 }
 
-type AnthropicWebResult = { url?: string; title?: string; snippet?: string; content?: string };
-type AnthropicContentBlock = { type?: string; content?: AnthropicWebResult[] };
+// Parse the model's JSON answer (`{ opportunities: [...] }`) into validated,
+// de-duplicated opportunities. Returns [] if the model returned no usable JSON.
+export function parseDiscoveredOpportunities(payload: {
+  content?: Array<{ type?: string; text?: string }>;
+}): DiscoveredOpportunity[] {
+  const textBlock = (payload.content ?? []).find((b) => b?.type === "text" && typeof b.text === "string");
+  const jsonText = extractJsonObject(textBlock?.text ?? "");
+  if (!jsonText) return [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonText);
+  } catch {
+    return [];
+  }
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { opportunities?: unknown[] })?.opportunities)
+      ? (raw as { opportunities: unknown[] }).opportunities
+      : [];
+  const out: DiscoveredOpportunity[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const parsed = discoveredOpportunitySchema.safeParse(item);
+    if (!parsed.success) continue;
+    const key = parsed.data.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(parsed.data);
+  }
+  return out;
+}
 
 export function extractDiscoveryHits(payload: { content?: AnthropicContentBlock[] }): DiscoveryHit[] {
   const seen = new Set<string>();
@@ -76,39 +119,80 @@ export function extractDiscoveryHits(payload: { content?: AnthropicContentBlock[
   return hits;
 }
 
-async function runClaudeDiscovery(keywords: string[], domains: string[]): Promise<DiscoverySearchResult> {
+async function runClaudeDiscovery(
+  keywords: string[],
+  domains: string[],
+): Promise<{ opportunities: DiscoveredOpportunity[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("Discovery is not configured. Add ANTHROPIC_API_KEY to the server environment.");
   const query = [
-    "Find currently open public-procurement opportunities matching these terms:",
+    "Find currently open public-procurement opportunities (RFP, RFQ, RFI, IFB, or solicitation) that match these terms:",
     keywords.map((keyword) => `- ${keyword}`).join("\n"),
-    "Return only currently open RFP, RFQ, RFI, or solicitation pages from the allowed procurement sources.",
-    "Do not invent opportunities or rewrite source titles. Search the web before answering.",
+    "Search the allowed procurement sources on the web before answering. Prefer individual solicitation pages that show a specific response due date over portal index or search-result pages.",
+    "For each real, currently open opportunity, extract these fields exactly as the source states them:",
+    "- title: the solicitation title",
+    "- agency: the issuing agency or organization",
+    "- url: the exact source URL",
+    '- dueDate: the response/proposal due date as written (for example "June 15, 2026"). Use "TBD — verify on source" only when the source shows no date.',
+    '- value: the estimated value or ceiling if stated (for example "$2.4M"). Use "Not listed" when the source gives none.',
+    "- summary: one sentence describing the scope.",
+    "Never invent opportunities, dates, values, or agencies — report only what the sources actually show.",
+    'Return JSON only, with no prose: {"opportunities":[{"title":"","agency":"","url":"","dueDate":"","value":"","summary":""}]}',
   ].join("\n\n");
   const tool: Record<string, unknown> = {
     type: "web_search_20260318",
     name: "web_search",
-    max_uses: Math.max(1, Math.min(4, Number(process.env.DISCOVERY_MAX_WEB_SEARCHES || 4))),
+    max_uses: Math.max(1, Math.min(6, Number(process.env.DISCOVERY_MAX_WEB_SEARCHES || 5))),
   };
   if (domains.length) tool.allowed_domains = domains;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      max_tokens: 700,
-      thinking: { type: "disabled" },
-      tools: [tool],
-      messages: [{ role: "user", content: query }],
-    }),
-  });
+  const timeoutMs = Math.max(20_000, Math.min(150_000, Number(process.env.DISCOVERY_TIMEOUT_MS) || 100_000));
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 3000,
+        thinking: { type: "disabled" },
+        tools: [tool],
+        messages: [{ role: "user", content: query }],
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const name = (error as Error)?.name;
+    console.error("[Achieve RFP] discovery request failed:", name, (error as Error)?.message);
+    throw new Error(
+      name === "TimeoutError" || name === "AbortError"
+        ? "Discovery timed out. Try again."
+        : "Discovery could not reach Anthropic.",
+    );
+  }
   if (!response.ok) throw new Error(`Claude discovery request failed (${response.status}).`);
-  const payload = await response.json() as { content?: AnthropicContentBlock[] };
-  return { hits: extractDiscoveryHits(payload) };
+  const payload = (await response.json()) as { content?: AnthropicContentBlock[] };
+  const opportunities = parseDiscoveredOpportunities(payload);
+  // Fallback: if the model didn't return structured JSON, keep the raw search
+  // hits (title/URL only) so a scan still surfaces something to review.
+  if (opportunities.length === 0) {
+    return {
+      opportunities: extractDiscoveryHits(payload)
+        .filter((hit) => hit.url)
+        .map((hit) => ({
+          title: hit.title || "Newly discovered opportunity",
+          agency: "",
+          url: hit.url as string,
+          dueDate: "",
+          value: "",
+          summary: hit.snippet ?? "",
+        })),
+    };
+  }
+  return { opportunities };
 }
 
 function buildDemoRfps(presetKey: ScanPresetKey): Array<Partial<Rfp>> {
@@ -277,26 +361,24 @@ export async function runScanForAccount(accountId: number): Promise<ScanRunResul
 
   try {
     const result = await runClaudeDiscovery(keywords, domainList);
-    const hits = result.hits
-      .filter((hit) => hit.url)
-      .filter((hit) => isRecentEnough(hit, 7))
+    const opportunities = result.opportunities
+      .filter((opp) => opp.url)
       .slice(0, KEYWORD_CAP * RESULTS_PER_KEYWORD);
-    for (const hit of hits) {
-      const url = (hit.url ?? "").trim();
+    for (const opp of opportunities) {
+      const url = opp.url.trim();
       if (!url) continue;
       const key = url.toLowerCase();
       if (existingUrls.has(key)) continue;
       existingUrls.add(key);
-      const snippet = (hit.snippet ?? hit.summary ?? "").slice(0, 280);
       newRfps.push({
-        title: hit.title || "Newly discovered opportunity",
-        agency: "From scan — review and update",
+        title: opp.title || "Newly discovered opportunity",
+        agency: opp.agency?.trim() || "From scan — review and update",
         url,
-        dueDateText: "TBD — verify on source",
-        valueText: "Not listed",
+        dueDateText: opp.dueDate?.trim() || "TBD — verify on source",
+        valueText: opp.value?.trim() || "Not listed",
         recommendation: "WATCH — Newly discovered",
         status: "new",
-        notes: snippet,
+        notes: (opp.summary ?? "").slice(0, 280),
       });
     }
   } catch (err) {

@@ -34,6 +34,13 @@ const SOURCES: { slug: string; label: string }[] = [
   { slug: "caleprocure", label: "Cal eProcure" },
   { slug: "bidnet", label: "BidNet Direct" },
   { slug: "highergov", label: "HigherGov" },
+  { slug: "govtribe", label: "GovTribe" },
+  { slug: "usaspending", label: "USAspending" },
+  { slug: "grants", label: "Grants.gov" },
+  { slug: "demandstar", label: "DemandStar" },
+  { slug: "bonfire", label: "Bonfire" },
+  { slug: "publicpurchase", label: "Public Purchase" },
+  { slug: "bidsync", label: "BidSync" },
 ];
 
 const LOGO_MAX_BYTES = 500 * 1024;

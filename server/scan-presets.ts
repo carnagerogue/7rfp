@@ -126,6 +126,13 @@ export const SOURCE_DOMAINS: Record<string, string> = {
   caleprocure: "caleprocure.ca.gov",
   bidnet: "bidnetdirect.com",
   highergov: "highergov.com",
+  govtribe: "govtribe.com",
+  usaspending: "usaspending.gov",
+  grants: "grants.gov",
+  demandstar: "demandstar.com",
+  bonfire: "bonfirehub.com",
+  publicpurchase: "publicpurchase.com",
+  bidsync: "bidsync.com",
 };
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -133,6 +140,13 @@ export const SOURCE_LABELS: Record<string, string> = {
   caleprocure: "Cal eProcure",
   bidnet: "BidNet Direct",
   highergov: "HigherGov",
+  govtribe: "GovTribe",
+  usaspending: "USAspending",
+  grants: "Grants.gov",
+  demandstar: "DemandStar",
+  bonfire: "Bonfire",
+  publicpurchase: "Public Purchase",
+  bidsync: "BidSync",
 };
 
 export function sourcesToDomains(slugs: string[]): string {
