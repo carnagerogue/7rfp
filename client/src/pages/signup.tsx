@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Wordmark } from "@/components/brand";
-import { LogoWithWordmark } from "@/components/logo";
+import { Logo } from "@/components/logo";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -55,7 +55,7 @@ export default function SignupPage() {
       <main className="flex-1 flex items-center justify-center px-6 py-12">
         <Card className="w-full max-w-md p-8">
           <div className="flex justify-center mb-5">
-            <LogoWithWordmark size={48} textClassName="text-2xl" />
+            <Logo size={44} className="text-primary" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight mb-1">Create your workspace</h1>
           <p className="text-sm text-muted-foreground mb-6">

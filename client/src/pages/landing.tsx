@@ -2,8 +2,8 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo, LogoWithWordmark } from "@/components/logo";
-import heroRfps from "@/assets/hero-rfps.png";
-import heroScan from "@/assets/hero-scan.png";
+import { AppPreview } from "@/components/app-preview";
+import { ScanPreview } from "@/components/scan-preview";
 import {
   ArrowRight,
   Search,
@@ -56,7 +56,7 @@ export default function LandingPage() {
                 className="text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-5"
                 data-testid="text-hero-title"
               >
-                We make winning RFPs <span className="text-primary">easy</span>.
+                We make winning RFPs <span className="text-teal">easy</span>.
               </h1>
               <p className="text-base text-muted-foreground leading-relaxed mb-8 max-w-lg">
                 Qualify opportunities. Build evidence-backed responses.
@@ -92,13 +92,11 @@ export default function LandingPage() {
             {/* Right: product screenshot */}
             <div className="relative">
               <div className="absolute -inset-4 bg-gradient-to-br from-primary/10 to-transparent rounded-2xl blur-2xl" />
-              <div className="relative rounded-xl border border-border shadow-2xl overflow-hidden bg-card">
-                <img
-                  src={heroRfps}
-                  alt="Achieve RFP dashboard showing RFP opportunities"
-                  className="w-full h-auto"
-                  data-testid="img-hero-product"
-                />
+              <div
+                className="relative rounded-xl border border-border shadow-2xl overflow-hidden bg-card"
+                data-testid="img-hero-product"
+              >
+                <AppPreview />
               </div>
             </div>
           </div>
@@ -208,13 +206,11 @@ export default function LandingPage() {
               </ul>
             </div>
             <div className="relative">
-              <div className="rounded-xl border border-border shadow-xl overflow-hidden bg-card">
-                <img
-                  src={heroScan}
-                  alt="Weekly scan results"
-                  className="w-full h-auto"
-                  data-testid="img-scan-product"
-                />
+              <div
+                className="rounded-xl border border-border shadow-xl overflow-hidden bg-card"
+                data-testid="img-scan-product"
+              >
+                <ScanPreview />
               </div>
             </div>
           </div>
@@ -459,10 +455,10 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <LogoWithWordmark size={28} textClassName="text-base" />
             <p className="text-xs text-muted-foreground">
-              We make winning RFPs easy.
+              An iT1 Nucleos company · Part of the Achieve product family.
             </p>
             <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} Achieve RFP Intelligence. All rights reserved.
+              © {new Date().getFullYear()} iT1 Nucleos. All rights reserved.
             </p>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { LogoWithWordmark } from "@/components/logo";
+import { Logo, LogoWithWordmark } from "@/components/logo";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   FileText,
@@ -114,7 +114,7 @@ function SidebarInner({ collapsed = false }: { collapsed?: boolean }) {
             )}
           </>
         ) : collapsed ? (
-          <LogoWithWordmark size={28} textClassName="hidden" />
+          <Logo size={26} className="text-primary" />
         ) : (
           <LogoWithWordmark size={32} textClassName="text-base" />
         )}
