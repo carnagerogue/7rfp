@@ -27,6 +27,8 @@ import {
   PursuitIntelligenceError,
   runPursuitIntelligence,
 } from "./pursuit-intelligence";
+import { CompanyResearchError, researchCompany } from "./company-research";
+import { DocumentExtractionError, extractDocumentText } from "./document-extraction";
 import { z } from "zod";
 
 function publicAccount(a: { id: number; email: string; companyName: string; plan: string }) {
@@ -34,6 +36,8 @@ function publicAccount(a: { id: number; email: string; companyName: string; plan
 }
 
 const intelligenceInFlightAccounts = new Set<number>();
+const companyResearchInFlightAccounts = new Set<number>();
+const companyResearchRuns = new Map<number, number[]>();
 
 function parseAiRun(run: { id: number; action: string; model: string; resultJson: string; sourceIdsJson: string; inputTokens: number; outputTokens: number; createdAt: Date }) {
   try {
@@ -181,6 +185,58 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       sourceUrl: parsed.data.sourceUrl || null,
     });
     res.status(201).json({ source });
+  });
+  const documentUploadSchema = z.object({
+    fileName: z.string().trim().min(3).max(240),
+    dataUrl: z.string().min(40).max(4_300_000),
+    sourceType: z.enum(["capability_statement", "case_study", "past_performance", "certification", "product", "note"]).default("capability_statement"),
+    title: z.string().trim().min(2).max(180).optional(),
+  });
+  app.post("/api/company-sources/upload", authMiddleware, async (req, res) => {
+    const parsed = documentUploadSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Invalid document" });
+    try {
+      const content = await extractDocumentText(parsed.data);
+      const defaultTitle = parsed.data.fileName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+      const source = storage.createCompanySource(req.accountId!, {
+        title: parsed.data.title || defaultTitle || "Uploaded company document",
+        sourceType: parsed.data.sourceType,
+        sourceUrl: null,
+        content,
+        status: "verified",
+      });
+      res.status(201).json({ source, extractedCharacters: content.length });
+    } catch (error) {
+      if (error instanceof DocumentExtractionError) return res.status(error.status).json({ message: error.message });
+      console.error("[company-evidence] document extraction failed", error);
+      res.status(500).json({ message: "Document extraction failed." });
+    }
+  });
+  const companyResearchSchema = z.object({
+    companyName: z.string().trim().min(2).max(180),
+    companyUrl: z.string().trim().url().max(1_000).optional().or(z.literal("")),
+    focus: z.string().trim().max(300).optional(),
+  });
+  app.post("/api/company-research", authMiddleware, async (req, res) => {
+    const parsed = companyResearchSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Invalid company research request" });
+    const accountId = req.accountId!;
+    const now = Date.now();
+    const recentRuns = (companyResearchRuns.get(accountId) ?? []).filter((time) => time > now - 60 * 60 * 1000);
+    if (recentRuns.length >= 6) return res.status(429).json({ message: "Company research limit reached. Try again in an hour." });
+    if (companyResearchInFlightAccounts.has(accountId)) return res.status(409).json({ message: "Company research is already running for this workspace." });
+    companyResearchRuns.set(accountId, [...recentRuns, now]);
+    companyResearchInFlightAccounts.add(accountId);
+    try {
+      const research = await researchCompany({ ...parsed.data, companyUrl: parsed.data.companyUrl || undefined });
+      res.json({ research });
+    } catch (error) {
+      if (error instanceof CompanyResearchError) return res.status(error.status).json({ message: error.message });
+      console.error("[company-evidence] research failed", error);
+      res.status(500).json({ message: "Company research failed." });
+    } finally {
+      companyResearchInFlightAccounts.delete(accountId);
+    }
   });
   app.delete("/api/company-sources/:id", authMiddleware, (req, res) => {
     const id = Number(req.params.id);
