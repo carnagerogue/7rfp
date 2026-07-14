@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { storage } from "./storage";
 import {
   getPreset,
@@ -8,7 +7,7 @@ import {
 } from "./scan-presets";
 import type { Profile, Rfp } from "@shared/schema";
 
-type PplxHit = {
+type DiscoveryHit = {
   url?: string;
   title?: string;
   domain?: string;
@@ -17,9 +16,8 @@ type PplxHit = {
   date?: string;
 };
 
-type PplxSearchResult = {
-  hits?: PplxHit[];
-  total?: number;
+type DiscoverySearchResult = {
+  hits: DiscoveryHit[];
 };
 
 const KEYWORD_CAP = 8;
@@ -48,7 +46,7 @@ function parseSources(profile: Profile): string[] {
 
 // Best-effort recency filter — if the result has a parseable date, keep only
 // items from the last 7 days; otherwise keep them (we can't tell).
-function isRecentEnough(hit: PplxHit, daysBack = 7): boolean {
+function isRecentEnough(hit: DiscoveryHit, daysBack = 7): boolean {
   if (!hit.date) return true;
   const t = Date.parse(hit.date);
   if (Number.isNaN(t)) return true;
@@ -56,18 +54,61 @@ function isRecentEnough(hit: PplxHit, daysBack = 7): boolean {
   return t >= cutoff;
 }
 
-function runPplxSearch(keyword: string, domains: string): PplxSearchResult {
-  const args = ["search", "web", keyword];
-  if (domains) {
-    args.push("--domains", domains);
+type AnthropicWebResult = { url?: string; title?: string; snippet?: string; content?: string };
+type AnthropicContentBlock = { type?: string; content?: AnthropicWebResult[] };
+
+export function extractDiscoveryHits(payload: { content?: AnthropicContentBlock[] }): DiscoveryHit[] {
+  const seen = new Set<string>();
+  const hits: DiscoveryHit[] = [];
+  for (const block of payload.content ?? []) {
+    if (block.type !== "web_search_tool_result") continue;
+    for (const result of Array.isArray(block.content) ? block.content : []) {
+      const url = result.url?.trim();
+      if (!url || seen.has(url.toLowerCase())) continue;
+      seen.add(url.toLowerCase());
+      hits.push({
+        url,
+        title: result.title?.trim() || url,
+        snippet: (result.snippet ?? result.content ?? "").trim(),
+      });
+    }
   }
-  const stdout = execFileSync("pplx", args, {
-    encoding: "utf8",
-    timeout: 30_000,
-    maxBuffer: 8 * 1024 * 1024,
-    env: { ...process.env },
+  return hits;
+}
+
+async function runClaudeDiscovery(keywords: string[], domains: string[]): Promise<DiscoverySearchResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("Discovery is not configured. Add ANTHROPIC_API_KEY to the server environment.");
+  const query = [
+    "Find currently open public-procurement opportunities matching these terms:",
+    keywords.map((keyword) => `- ${keyword}`).join("\n"),
+    "Return only currently open RFP, RFQ, RFI, or solicitation pages from the allowed procurement sources.",
+    "Do not invent opportunities or rewrite source titles. Search the web before answering.",
+  ].join("\n\n");
+  const tool: Record<string, unknown> = {
+    type: "web_search_20260318",
+    name: "web_search",
+    max_uses: Math.max(1, Math.min(4, Number(process.env.DISCOVERY_MAX_WEB_SEARCHES || 4))),
+  };
+  if (domains.length) tool.allowed_domains = domains;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5",
+      max_tokens: 700,
+      thinking: { type: "disabled" },
+      tools: [tool],
+      messages: [{ role: "user", content: query }],
+    }),
   });
-  return JSON.parse(stdout) as PplxSearchResult;
+  if (!response.ok) throw new Error(`Claude discovery request failed (${response.status}).`);
+  const payload = await response.json() as { content?: AnthropicContentBlock[] };
+  return { hits: extractDiscoveryHits(payload) };
 }
 
 function buildDemoRfps(presetKey: ScanPresetKey): Array<Partial<Rfp>> {
@@ -215,7 +256,7 @@ export async function runScanForAccount(accountId: number): Promise<ScanRunResul
   }
 
   const sources = parseSources(profile);
-  const domains = sourcesToDomains(sources);
+  const domainList = sourcesToDomains(sources).split(",").filter(Boolean);
 
   const existingRfps = storage.listRfps(accountId);
   const existingUrls = new Set(
@@ -235,36 +276,28 @@ export async function runScanForAccount(accountId: number): Promise<ScanRunResul
   }> = [];
 
   try {
-    for (const keyword of keywords) {
-      let result: PplxSearchResult;
-      try {
-        result = runPplxSearch(keyword, domains);
-      } catch (innerErr) {
-        // pplx not available or failed — surface to outer catch for demo fallback.
-        throw innerErr;
-      }
-      const hits = (result.hits ?? [])
-        .filter((h) => h.url)
-        .filter((h) => isRecentEnough(h, 7))
-        .slice(0, RESULTS_PER_KEYWORD);
-      for (const hit of hits) {
-        const url = (hit.url ?? "").trim();
-        if (!url) continue;
-        const key = url.toLowerCase();
-        if (existingUrls.has(key)) continue;
-        existingUrls.add(key);
-        const snippet = (hit.snippet ?? hit.summary ?? "").slice(0, 280);
-        newRfps.push({
-          title: hit.title || keyword,
-          agency: "From scan — review and update",
-          url,
-          dueDateText: "TBD — verify on source",
-          valueText: "Not listed",
-          recommendation: "WATCH — Newly discovered",
-          status: "new",
-          notes: snippet,
-        });
-      }
+    const result = await runClaudeDiscovery(keywords, domainList);
+    const hits = result.hits
+      .filter((hit) => hit.url)
+      .filter((hit) => isRecentEnough(hit, 7))
+      .slice(0, KEYWORD_CAP * RESULTS_PER_KEYWORD);
+    for (const hit of hits) {
+      const url = (hit.url ?? "").trim();
+      if (!url) continue;
+      const key = url.toLowerCase();
+      if (existingUrls.has(key)) continue;
+      existingUrls.add(key);
+      const snippet = (hit.snippet ?? hit.summary ?? "").slice(0, 280);
+      newRfps.push({
+        title: hit.title || "Newly discovered opportunity",
+        agency: "From scan — review and update",
+        url,
+        dueDateText: "TBD — verify on source",
+        valueText: "Not listed",
+        recommendation: "WATCH — Newly discovered",
+        status: "new",
+        notes: snippet,
+      });
     }
   } catch (err) {
     const allowDemo = process.env.ALLOW_DEMO_SCAN === "true" && process.env.NODE_ENV !== "production";
@@ -272,7 +305,7 @@ export async function runScanForAccount(accountId: number): Promise<ScanRunResul
     if (!allowDemo) {
       const scanError: ScanRunError = {
         status: 503,
-        message: "Live discovery is unavailable. No opportunities were added. Configure the discovery provider and try again.",
+        message: "Live discovery is unavailable. Add ANTHROPIC_API_KEY in deployment settings, then try again.",
       };
       throw scanError;
     }
