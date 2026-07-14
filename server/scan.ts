@@ -301,7 +301,7 @@ export async function runScanForAccount(accountId: number): Promise<ScanRunResul
     }
   } catch (err) {
     const allowDemo = process.env.ALLOW_DEMO_SCAN === "true" && process.env.NODE_ENV !== "production";
-    console.warn("[7RFP] scan: live discovery unavailable.", (err as Error)?.message ?? err);
+    console.warn("[Achieve RFP] scan: live discovery unavailable.", (err as Error)?.message ?? err);
     if (!allowDemo) {
       const scanError: ScanRunError = {
         status: 503,

@@ -1,4 +1,4 @@
-# Deploy 7RFP on Railway
+# Deploy Achieve RFP Intelligence on Railway
 
 Railway hosts the complete Express application: UI, authentication, API, SQLite, and Claude integration. GitHub Pages cannot run this server-backed application.
 

@@ -1,7 +1,6 @@
 import jsPDF from "jspdf";
 import type { Rfp, Profile } from "@shared/schema";
 import type { AuthAccount } from "./auth";
-import { SEVEN_RFP_LOGO_DATA_URL } from "./brand-logo";
 
 export type ProposalSections = {
   executiveSummary?: string | null;
@@ -54,7 +53,7 @@ async function loadLogoMeta(
   if (lower.startsWith("data:image/png")) format = "PNG";
   else if (lower.startsWith("data:image/jpeg") || lower.startsWith("data:image/jpg")) format = "JPEG";
   else {
-    console.warn("[7RFP] PDF: unsupported logo format (expected PNG or JPEG); skipping logo.");
+    console.warn("[Achieve RFP] PDF: unsupported logo format (expected PNG or JPEG); skipping logo.");
     return null;
   }
   return new Promise((resolve) => {
@@ -97,7 +96,6 @@ export async function generateProposalPdf(
   const LOGO_MAX_H = 70;
   let companyNameY = 200;
   const tenantLogoUrl = profile?.logoDataUrl;
-  let tenantLogoEmbedded = false;
   if (tenantLogoUrl && tenantLogoUrl.length > 0) {
     const meta = await loadLogoMeta(tenantLogoUrl);
     if (meta) {
@@ -113,9 +111,8 @@ export async function generateProposalPdf(
         doc.addImage(tenantLogoUrl, meta.format, drawX, LOGO_TOP, drawW, drawH, undefined, "FAST");
         // Push the company-name block below the logo with a small gap.
         companyNameY = Math.max(companyNameY, LOGO_TOP + drawH + 32);
-        tenantLogoEmbedded = true;
       } catch (err) {
-        console.warn("[7RFP] PDF: failed to embed logo, continuing without it.", err);
+        console.warn("[Achieve RFP] PDF: failed to embed logo, continuing without it.", err);
       }
     }
   }
@@ -163,36 +160,11 @@ export async function generateProposalPdf(
     coverY += 16;
   }
 
-  // Subtle 7RFP branding at the bottom of the cover.
-  // - If the tenant did NOT upload their own logo, embed the 7RFP brand mark
-  //   centered above a small "Generated with 7RFP" caption.
-  // - If the tenant DID upload a logo, just keep the text caption (no second mark).
-  if (!tenantLogoEmbedded) {
-    try {
-      const brandMeta = await loadLogoMeta(SEVEN_RFP_LOGO_DATA_URL);
-      if (brandMeta) {
-        const brandW = 71; // ~25mm
-        const brandH = brandW / (brandMeta.width / brandMeta.height);
-        const brandX = (pageW - brandW) / 2;
-        const brandY = pageH - 90 - brandH;
-        doc.addImage(
-          SEVEN_RFP_LOGO_DATA_URL,
-          "PNG",
-          brandX,
-          brandY,
-          brandW,
-          brandH,
-          undefined,
-          "FAST"
-        );
-      }
-    } catch (err) {
-      console.warn("[7RFP] PDF: failed to embed brand watermark.", err);
-    }
-  }
+  // Keep the product attribution subtle and avoid placing a second logo on a
+  // tenant-branded proposal cover.
   doc.setFontSize(9);
   doc.setTextColor(150, 155, 165);
-  const caption = "Generated with 7RFP";
+  const caption = "Generated with Achieve RFP Intelligence";
   const captionWidth = doc.getTextWidth(caption);
   doc.text(caption, (pageW - captionWidth) / 2, pageH - 60);
 
@@ -260,8 +232,7 @@ export async function generateProposalPdf(
     }
   }
 
-  const fileName = `7RFP_${slug(account.companyName)}_${slug(rfp.title)}_${ymd(today)}.pdf`;
+  const fileName = `achieve_rfp_${slug(account.companyName)}_${slug(rfp.title)}_${ymd(today)}.pdf`;
   doc.save(fileName);
   return fileName;
 }
-

@@ -47,7 +47,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-5">
             <LogoWithWordmark size={48} textClassName="text-2xl" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight mb-1">Log in to 7RFP</h1>
+          <h1 className="text-xl font-semibold tracking-tight mb-1">Log in to Achieve RFP</h1>
           <p className="text-sm text-muted-foreground mb-6">Welcome back.</p>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">

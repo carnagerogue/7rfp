@@ -1,4 +1,4 @@
-# Render deployment config for 7RFP
+# Render deployment config for Achieve RFP Intelligence
 # https://render.com/docs/blueprint-spec
 #
 # What this provisions:
@@ -7,11 +7,10 @@
 #   - Auto-deploy on push to main
 #   - Health check against the root path
 #
-# Custom domain (7rfp.com) is added in the Render dashboard after first deploy.
 
 services:
   - type: web
-    name: 7rfp
+    name: achieve-rfp-intelligence
     runtime: node
     region: oregon          # closest to LA / Inland Empire
     plan: starter           # $7/mo — required for persistent disk + always-on

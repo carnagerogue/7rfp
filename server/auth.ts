@@ -6,7 +6,7 @@ const configuredSecret = process.env.JWT_SECRET;
 if (process.env.NODE_ENV === "production" && !configuredSecret) {
   throw new Error("JWT_SECRET is required in production");
 }
-const JWT_SECRET = configuredSecret || "7rfp-local-development-only-secret";
+const JWT_SECRET = configuredSecret || "achieve-rfp-local-development-only-secret";
 const TOKEN_TTL = "30d";
 const AUTH_COOKIE = "rfp_session";
 

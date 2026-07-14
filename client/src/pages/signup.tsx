@@ -34,7 +34,7 @@ export default function SignupPage() {
     setBusy(true);
     try {
       await signup(email, password, companyName);
-      toast({ title: "Welcome to 7RFP", description: "Your workspace is ready." });
+      toast({ title: "Welcome to Achieve RFP", description: "Your workspace is ready." });
       setLocation("/app/rfps");
     } catch (err: any) {
       setError(err.message || "Sign up failed.");

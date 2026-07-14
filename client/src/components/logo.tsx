@@ -1,11 +1,11 @@
-// Inline SVG version of the 7RFP mark.
-// Rounded square with a stylized "7" — single color, transparent background,
+// Inline SVG version of the Achieve RFP mark.
+// Rounded square with a stylized "A" — single color, transparent background,
 // scales cleanly to any size.
 
 interface LogoProps {
   size?: number;
   className?: string;
-  /** True = filled rounded square (navy bg, white "7"). False = outline only. */
+  /** True = filled rounded square (navy bg, white "A"). False = outline only. */
   filled?: boolean;
 }
 
@@ -18,14 +18,14 @@ export function Logo({ size = 32, className = "", filled = true }: LogoProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label="7RFP"
+      aria-label="Achieve RFP Intelligence"
     >
       {filled ? (
         <>
           <rect width="64" height="64" rx="14" fill="currentColor" />
-          {/* "7" mark */}
+          {/* "A" mark */}
           <path
-            d="M20 18 H46 L30 48"
+            d="M18 47L29 18H35L46 47M23 35H41"
             stroke="white"
             strokeWidth="6"
             strokeLinecap="round"
@@ -46,7 +46,7 @@ export function Logo({ size = 32, className = "", filled = true }: LogoProps) {
             fill="none"
           />
           <path
-            d="M20 18 H46 L30 48"
+            d="M18 47L29 18H35L46 47M23 35H41"
             stroke="currentColor"
             strokeWidth="6"
             strokeLinecap="round"
@@ -59,7 +59,7 @@ export function Logo({ size = 32, className = "", filled = true }: LogoProps) {
   );
 }
 
-/** Logo + "7RFP" wordmark together, useful for nav/header/auth screens. */
+/** Logo + Achieve RFP wordmark together, useful for nav/header/auth screens. */
 export function LogoWithWordmark({
   size = 36,
   textClassName = "",
@@ -75,7 +75,7 @@ export function LogoWithWordmark({
       <span
         className={`font-bold tracking-tight text-foreground ${textClassName || "text-xl"}`}
       >
-        RFP
+        Achieve RFP
       </span>
     </div>
   );

@@ -201,7 +201,7 @@ export async function runPursuitIntelligence(request: IntelligenceRequest) {
   const focus = clip(request.focus, MAX_FOCUS_CHARS);
   const sourcePacket = sources.map((source) => `[${source.id}] ${source.label}\n${source.text}`).join("\n\n");
   const system = [
-    "You are 7RFP Pursuit Intelligence, a precise proposal analyst.",
+    "You are Achieve RFP Intelligence, a precise proposal analyst.",
     "Use only supplied sources. Never invent facts, capabilities, results, contract commitments, deadlines, or agency priorities.",
     "Do not introduce external standards, examples, best practices, or likelihood claims. If the sources do not establish something, phrase it only as an unresolved question or evidence gap.",
     "Every non-empty list item must cite one or more exact source IDs from supplied sources.",

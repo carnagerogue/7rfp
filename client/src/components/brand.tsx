@@ -7,7 +7,7 @@ export function Logo({ className = "h-6 w-6" }: LogoProps) {
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="7RFP logo"
+      aria-label="Achieve RFP Intelligence logo"
     >
       {/* Document outline with folded corner */}
       <path
@@ -38,7 +38,7 @@ export function Wordmark({ className = "" }: LogoProps) {
   return (
     <div className={`flex items-center gap-2 ${className}`} data-testid="wordmark">
       <Logo className="h-6 w-6 text-primary" />
-      <span className="font-semibold text-base tracking-tight">7RFP</span>
+      <span className="font-semibold text-base tracking-tight">Achieve RFP</span>
     </div>
   );
 }

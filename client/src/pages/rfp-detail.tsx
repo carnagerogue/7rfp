@@ -320,7 +320,7 @@ function ComplianceWorkspace({ rfpId, recommendation }: { rfpId: number; recomme
               <div className="max-w-md">
                 <ShieldCheck className="h-10 w-10 text-primary mx-auto mb-4" />
                 <h3 className="text-lg font-semibold">Build requirement traceability first</h3>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Paste solicitation text. 7RFP extracts obligation language into a reviewable matrix before drafting starts.</p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Paste solicitation text. Achieve RFP extracts obligation language into a reviewable matrix before drafting starts.</p>
                 <Button className="mt-5" onClick={() => setShowImporter(true)}>Import solicitation text</Button>
               </div>
             </div>

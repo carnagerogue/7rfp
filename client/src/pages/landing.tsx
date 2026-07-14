@@ -95,7 +95,7 @@ export default function LandingPage() {
               <div className="relative rounded-xl border border-border shadow-2xl overflow-hidden bg-card">
                 <img
                   src={heroRfps}
-                  alt="7RFP dashboard showing RFP opportunities"
+                  alt="Achieve RFP dashboard showing RFP opportunities"
                   className="w-full h-auto"
                   data-testid="img-hero-product"
                 />
@@ -141,7 +141,7 @@ export default function LandingPage() {
             Three things, all easy.
           </h2>
           <p className="text-base text-muted-foreground">
-            Most RFP tools wait for you to find the opportunity. 7RFP finds it first.
+            Most RFP tools wait for you to find the opportunity. Achieve RFP finds it first.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-6">
@@ -443,7 +443,7 @@ export default function LandingPage() {
           Your next RFP win is already on a portal somewhere.
         </h2>
         <p className="text-base text-muted-foreground max-w-xl mx-auto mb-8">
-          Let 7RFP find it for you. Set up your workspace in under a minute.
+          Let Achieve RFP find it for you. Set up your workspace in under a minute.
         </p>
         <Link href="/signup">
           <Button size="lg" data-testid="button-final-signup">
@@ -462,7 +462,7 @@ export default function LandingPage() {
               We make winning RFPs easy.
             </p>
             <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} 7RFP. All rights reserved.
+              © {new Date().getFullYear()} Achieve RFP Intelligence. All rights reserved.
             </p>
           </div>
         </div>
