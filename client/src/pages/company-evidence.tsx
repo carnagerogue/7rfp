@@ -15,6 +15,7 @@ import type { CompanySource } from "@shared/schema";
 import {
   ArrowRight,
   BookOpenCheck,
+  Boxes,
   Check,
   ChevronRight,
   CircleCheck,
@@ -26,6 +27,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -43,7 +45,7 @@ const sourceTypes = [
 
 const documentTypes = sourceTypes.filter(([value]) => value !== "website") as readonly (readonly [string, string])[];
 const initial = { title: "", sourceType: "note", sourceUrl: "", content: "" };
-type IntakeMode = "upload" | "research" | "paste";
+type IntakeMode = "upload" | "research" | "paste" | "skill";
 type PendingDocument = { name: string; dataUrl: string; size: number };
 type Research = {
   summary: string;
@@ -54,10 +56,13 @@ const intakeTabs: Array<{ value: IntakeMode; label: string; icon: LucideIcon }> 
   { value: "upload", label: "Upload document", icon: Upload },
   { value: "research", label: "Research public context", icon: Search },
   { value: "paste", label: "Paste exact material", icon: FileText },
+  { value: "skill", label: "Import from AI skill", icon: Boxes },
 ];
 
 function sourceIcon(type: string) {
-  return type === "website" || type === "product" ? Globe2 : FileText;
+  if (type === "website" || type === "product") return Globe2;
+  if (type === "skill") return Boxes;
+  return FileText;
 }
 
 function readableBytes(size: number) {
@@ -87,6 +92,8 @@ export default function CompanyEvidencePage() {
   const [researchFocus, setResearchFocus] = useState("");
   const [research, setResearch] = useState<Research | null>(null);
   const [selectedFindings, setSelectedFindings] = useState<number[]>([]);
+  const [skillUrl, setSkillUrl] = useState("");
+  const [skillName, setSkillName] = useState("");
   const { data, isLoading } = useQuery<{ sources: CompanySource[] }>({ queryKey: ["/api/company-sources"] });
   const sources = data?.sources ?? [];
   const hasResearch = Boolean(research);
@@ -129,6 +136,23 @@ export default function CompanyEvidencePage() {
       setSelectedFindings(research.findings.map((_, index) => index));
     },
     onError: (error: Error) => toast({ title: "Research could not run", description: error.message, variant: "destructive" }),
+  });
+  const ingestSkillMut = useMutation({
+    mutationFn: async () =>
+      (await apiRequest("POST", "/api/company-sources/ingest-skill", {
+        url: skillUrl.trim(),
+        skill: skillName.trim() || undefined,
+      })).json() as Promise<{ skillName: string; added: number }>,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/company-sources"] });
+      setSkillUrl("");
+      setSkillName("");
+      toast({
+        title: "Skill imported",
+        description: `Added ${result.added} evidence source${result.added === 1 ? "" : "s"} from ${result.skillName}.`,
+      });
+    },
+    onError: (error: Error) => toast({ title: "Could not import skill", description: error.message, variant: "destructive" }),
   });
   const deleteMut = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/company-sources/${id}`),
@@ -233,6 +257,26 @@ export default function CompanyEvidencePage() {
             </div>}
 
             {mode === "paste" && <div className="space-y-4"><div><h3 className="text-lg font-semibold tracking-tight text-slate-950">Add one precise source.</h3><p className="mt-1 text-sm leading-6 text-slate-500">Use exact, current material your team can defend in a proposal.</p></div><div className="grid gap-4 sm:grid-cols-[1fr_220px]"><div className="space-y-1.5"><Label htmlFor="source-title">Evidence title</Label><Input id="source-title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="2025 capability statement" /></div><div className="space-y-1.5"><Label>Material type</Label><Select value={form.sourceType} onValueChange={(sourceType) => setForm({ ...form, sourceType })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{sourceTypes.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div><div className="space-y-1.5"><Label htmlFor="source-url">Source URL <span className="font-normal text-slate-400">optional</span></Label><Input id="source-url" value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder="https://example.com/product" /></div><div className="space-y-1.5"><Label htmlFor="source-content">Approved text</Label><Textarea id="source-content" rows={11} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Paste the exact capabilities, proof points, certifications, or outcomes that AI may cite." /><p className="text-xs text-slate-500">Minimum 20 characters. Be factual and specific.</p></div><div className="flex justify-end border-t border-slate-200 pt-5"><Button onClick={() => addMut.mutate(form)} disabled={addMut.isPending || form.title.trim().length < 2 || form.content.trim().length < 20}>{addMut.isPending ? "Adding…" : "Add approved evidence"}</Button></div></div>}
+            {mode === "skill" && <div className="space-y-5">
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-slate-950">Import an AI skill your team already maintains.</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">Point to a public skill repository — the same repos <code className="rounded bg-slate-100 px-1 py-0.5 text-[13px]">npx skills</code> installs. Achieve RFP reads its SKILL.md and reference docs and adds them as reviewable evidence Claude can cite.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[1fr_240px]">
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-url">Skill repository URL</Label>
+                  <Input id="skill-url" type="url" value={skillUrl} onChange={(event) => setSkillUrl(event.target.value)} placeholder="https://github.com/org/agent-skills" data-testid="input-skill-url" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-name">Skill name <span className="font-normal text-slate-400">optional</span></Label>
+                  <Input id="skill-name" value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="company-evidence" data-testid="input-skill-name" />
+                </div>
+              </div>
+              <div className="border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                <Terminal className="mr-2 inline h-4 w-4 text-primary" /> From <code className="rounded bg-slate-100 px-1 py-0.5 text-[13px] text-slate-800">npx skills add https://github.com/org/agent-skills --skill company-evidence</code> — paste the repo URL above and put the value after <code className="text-slate-800">--skill</code> in the second field.
+              </div>
+              <Button onClick={() => ingestSkillMut.mutate()} disabled={ingestSkillMut.isPending || skillUrl.trim().length < 8} data-testid="button-ingest-skill">{ingestSkillMut.isPending ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Reading skill from GitHub…</> : <><Boxes className="mr-1.5 h-4 w-4" />Import skill as evidence</>}</Button>
+            </div>}
           </div>
         </Card>
 

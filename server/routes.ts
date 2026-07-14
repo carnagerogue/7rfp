@@ -29,6 +29,7 @@ import {
 } from "./pursuit-intelligence";
 import { CompanyResearchError, researchCompany } from "./company-research";
 import { DocumentExtractionError, extractDocumentText } from "./document-extraction";
+import { SkillIngestionError, ingestSkill } from "./skill-ingestion";
 import { z } from "zod";
 
 function publicAccount(a: { id: number; email: string; companyName: string; plan: string }) {
@@ -38,6 +39,8 @@ function publicAccount(a: { id: number; email: string; companyName: string; plan
 const intelligenceInFlightAccounts = new Set<number>();
 const companyResearchInFlightAccounts = new Set<number>();
 const companyResearchRuns = new Map<number, number[]>();
+const skillIngestInFlightAccounts = new Set<number>();
+const skillIngestRuns = new Map<number, number[]>();
 
 function parseAiRun(run: { id: number; action: string; model: string; resultJson: string; sourceIdsJson: string; inputTokens: number; outputTokens: number; createdAt: Date }) {
   try {
@@ -238,6 +241,45 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       companyResearchInFlightAccounts.delete(accountId);
     }
   });
+  // Import an "AI skill" (SKILL.md + reference docs) from a public GitHub repo
+  // as reviewable company evidence. See server/skill-ingestion.ts.
+  const skillIngestSchema = z.object({
+    url: z.string().trim().url().max(400),
+    skill: z.string().trim().max(120).optional().or(z.literal("")),
+  });
+  app.post("/api/company-sources/ingest-skill", authMiddleware, async (req, res) => {
+    const parsed = skillIngestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Invalid skill request" });
+    const accountId = req.accountId!;
+    const now = Date.now();
+    const recentRuns = (skillIngestRuns.get(accountId) ?? []).filter((time) => time > now - 60 * 60 * 1000);
+    if (recentRuns.length >= 10) return res.status(429).json({ message: "Skill import limit reached. Try again in an hour." });
+    if (skillIngestInFlightAccounts.has(accountId)) return res.status(409).json({ message: "A skill import is already running for this workspace." });
+    skillIngestRuns.set(accountId, [...recentRuns, now]);
+    skillIngestInFlightAccounts.add(accountId);
+    try {
+      const { skillName, sources } = await ingestSkill({ url: parsed.data.url, skill: parsed.data.skill || undefined });
+      const created = sources
+        .map((source) =>
+          storage.createCompanySource(accountId, {
+            title: source.title,
+            sourceType: source.sourceType,
+            sourceUrl: source.sourceUrl,
+            content: source.content,
+            status: "verified",
+          }),
+        )
+        .filter(Boolean);
+      res.status(201).json({ skillName, sources: created, added: created.length });
+    } catch (error) {
+      if (error instanceof SkillIngestionError) return res.status(error.status).json({ message: error.message });
+      console.error("[company-evidence] skill ingestion failed", error);
+      res.status(500).json({ message: "Skill ingestion failed." });
+    } finally {
+      skillIngestInFlightAccounts.delete(accountId);
+    }
+  });
+
   app.delete("/api/company-sources/:id", authMiddleware, (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid id" });
