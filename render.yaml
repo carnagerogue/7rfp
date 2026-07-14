@@ -1,0 +1,37 @@
+# Render deployment config for 7RFP
+# https://render.com/docs/blueprint-spec
+#
+# What this provisions:
+#   - One web service (Node) running the Express + Vite app
+#   - One persistent disk mounted at /var/data so SQLite (data.db) survives redeploys
+#   - Auto-deploy on push to main
+#   - Health check against the root path
+#
+# Custom domain (7rfp.com) is added in the Render dashboard after first deploy.
+
+services:
+  - type: web
+    name: 7rfp
+    runtime: node
+    region: oregon          # closest to LA / Inland Empire
+    plan: starter           # $7/mo — required for persistent disk + always-on
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/index.cjs
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATA_DB_PATH
+        value: /var/data/data.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
