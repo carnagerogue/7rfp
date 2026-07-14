@@ -64,18 +64,37 @@ export async function researchCompany(input: { companyName: string; companyUrl?:
     "Never infer, embellish, or treat search snippets as proof. Return concise review notes with source URLs.",
     focus ? `Prioritize: ${focus}` : "Prioritize the company overview, products, and differentiators.",
   ].join("\n");
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", "x-api-key": apiKey },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      max_tokens: 1_200,
-      thinking: { type: "disabled" },
-      tools: [{ type: "web_search_20260318", name: "web_search", max_uses: 4 }],
-      messages: [{ role: "user", content: `${request}\n\nReturn JSON only: { summary, findings: [{ title, detail, sourceUrls }] }. Each finding must include one or more exact URLs from the web search.` }],
-    }),
-    signal: AbortSignal.timeout(45_000),
-  }).catch(() => { throw new CompanyResearchError("Company research timed out. Try again.", 503); });
+  // Web-search-backed research is slow; give it room and make it tunable.
+  const timeoutMs = Math.max(20_000, Math.min(120_000, Number(process.env.COMPANY_RESEARCH_TIMEOUT_MS) || 90_000));
+  const maxSearches = Math.max(1, Math.min(5, Number(process.env.COMPANY_RESEARCH_MAX_WEB_SEARCHES) || 3));
+  let response: Response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", "x-api-key": apiKey },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 1_200,
+        thinking: { type: "disabled" },
+        tools: [{ type: "web_search_20260318", name: "web_search", max_uses: maxSearches }],
+        messages: [{ role: "user", content: `${request}\n\nReturn JSON only: { summary, findings: [{ title, detail, sourceUrls }] }. Each finding must include one or more exact URLs from the web search.` }],
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const name = (error as Error)?.name;
+    console.error("[company-research] request failed:", name, (error as Error)?.message);
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new CompanyResearchError(
+        `Company research took longer than ${Math.round(timeoutMs / 1000)}s and was stopped. Web research can be slow — please try again.`,
+        503,
+      );
+    }
+    throw new CompanyResearchError(
+      "Could not reach the research service. Verify the server's ANTHROPIC_API_KEY and outbound network, then try again.",
+      503,
+    );
+  }
   const payload = await response.json().catch(() => null) as { content?: AnthropicBlock[]; error?: { message?: string } } | null;
   if (!response.ok) throw new CompanyResearchError(payload?.error?.message || "Company research failed.", response.status === 429 ? 429 : 502);
   const hits = hitsFromPayload(payload ?? {});
