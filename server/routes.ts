@@ -244,7 +244,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Import an "AI skill" (SKILL.md + reference docs) from a public GitHub repo
   // as reviewable company evidence. See server/skill-ingestion.ts.
   const skillIngestSchema = z.object({
-    url: z.string().trim().url().max(400),
+    // Accepts a GitHub URL or a full `npx skills add … --skill …` command.
+    url: z.string().trim().min(3).max(400),
     skill: z.string().trim().max(120).optional().or(z.literal("")),
   });
   app.post("/api/company-sources/ingest-skill", authMiddleware, async (req, res) => {

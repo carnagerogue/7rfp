@@ -264,16 +264,16 @@ export default function CompanyEvidencePage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-[1fr_240px]">
                 <div className="space-y-1.5">
-                  <Label htmlFor="skill-url">Skill repository URL</Label>
-                  <Input id="skill-url" type="url" value={skillUrl} onChange={(event) => setSkillUrl(event.target.value)} placeholder="https://github.com/org/agent-skills" data-testid="input-skill-url" />
+                  <Label htmlFor="skill-url">Paste your <code className="rounded bg-slate-100 px-1 py-0.5 text-[13px]">npx skills</code> command or a GitHub URL</Label>
+                  <Input id="skill-url" value={skillUrl} onChange={(event) => setSkillUrl(event.target.value)} placeholder="npx skills add https://github.com/org/agent-skills --skill company-evidence" data-testid="input-skill-url" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="skill-name">Skill name <span className="font-normal text-slate-400">optional</span></Label>
-                  <Input id="skill-name" value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="company-evidence" data-testid="input-skill-name" />
+                  <Label htmlFor="skill-name">Skill name <span className="font-normal text-slate-400">override</span></Label>
+                  <Input id="skill-name" value={skillName} onChange={(event) => setSkillName(event.target.value)} placeholder="auto-detected" data-testid="input-skill-name" />
                 </div>
               </div>
               <div className="border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                <Terminal className="mr-2 inline h-4 w-4 text-primary" /> From <code className="rounded bg-slate-100 px-1 py-0.5 text-[13px] text-slate-800">npx skills add https://github.com/org/agent-skills --skill company-evidence</code> — paste the repo URL above and put the value after <code className="text-slate-800">--skill</code> in the second field.
+                <Terminal className="mr-2 inline h-4 w-4 text-primary" /> Paste the whole <code className="rounded bg-slate-100 px-1 py-0.5 text-[13px] text-slate-800">npx skills add …</code> command straight from a skill's README, or just its repository URL — we pull out the repo and skill name automatically.
               </div>
               <Button onClick={() => ingestSkillMut.mutate()} disabled={ingestSkillMut.isPending || skillUrl.trim().length < 8} data-testid="button-ingest-skill">{ingestSkillMut.isPending ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Reading skill from GitHub…</> : <><Boxes className="mr-1.5 h-4 w-4" />Import skill as evidence</>}</Button>
             </div>}

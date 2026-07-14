@@ -50,9 +50,12 @@ export function parseSkillTarget(
   rawUrl: string,
   skill?: string,
 ): { owner: string; repo: string; path: string; ref?: string } {
+  // Accept a bare GitHub URL or a full `npx skills add <url> --skill <name>` command.
+  const raw = rawUrl.trim();
+  const urlText = raw.match(/https?:\/\/[^\s"']+/)?.[0] ?? raw;
   let url: URL;
   try {
-    url = new URL(rawUrl.trim());
+    url = new URL(urlText);
   } catch {
     throw new SkillIngestionError("Enter a valid GitHub URL for the skill.");
   }
@@ -76,7 +79,9 @@ export function parseSkillTarget(
   if (parts[2] === "blob" && /\.[a-z0-9]+$/i.test(path)) {
     path = path.replace(/\/[^/]+$/, "");
   }
-  const cleanSkill = (skill ?? "").trim().replace(/^\/+|\/+$/g, "");
+  // A skill name may be passed explicitly or embedded as `--skill <name>`.
+  const skillFromCommand = raw.match(/--skill[=\s]+["']?([A-Za-z0-9._/-]+)["']?/)?.[1];
+  const cleanSkill = (skill || skillFromCommand || "").trim().replace(/^\/+|\/+$/g, "");
   if (cleanSkill) path = path ? `${path}/${cleanSkill}` : cleanSkill;
   return { owner, repo, path, ref };
 }

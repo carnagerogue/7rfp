@@ -21,6 +21,23 @@ test("parseSkillTarget: blob URL resolves to the containing folder", () => {
   assert.equal(target.path, "company-evidence");
 });
 
+test("parseSkillTarget: parses a full `npx skills add … --skill …` command", () => {
+  const target = parseSkillTarget(
+    "npx skills add https://github.com/Nucleos-LMS/nucleos-agent-skills --skill it1-nucleos-design",
+  );
+  assert.equal(target.owner, "Nucleos-LMS");
+  assert.equal(target.repo, "nucleos-agent-skills");
+  assert.equal(target.path, "it1-nucleos-design");
+});
+
+test("parseSkillTarget: an explicit skill argument overrides the command's --skill", () => {
+  const target = parseSkillTarget(
+    "npx skills add https://github.com/acme/skills --skill alpha",
+    "beta",
+  );
+  assert.equal(target.path, "beta");
+});
+
 test("parseSkillTarget: strips .git and rejects non-GitHub hosts", () => {
   assert.equal(parseSkillTarget("https://github.com/acme/skills.git").repo, "skills");
   assert.throws(() => parseSkillTarget("https://gitlab.com/acme/skills"), /github\.com/);
